@@ -6,39 +6,36 @@ import (
 	"strings"
 )
 
-func CreateVM(name string) error {
+func CreateVM(name, diskPath string) error {
 	// Create VM
 	cmd := exec.Command("VBoxManage", "createvm", "--name", name, "--ostype", "Ubuntu_64", "--register")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create VM: %v", err)
 	}
 
-	// Configure VM (add storage, network, etc.)
-	// For simplicity, assume a basic setup
+	// Configure VM
 	cmd = exec.Command("VBoxManage", "modifyvm", name, "--memory", "1024", "--cpus", "1")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to modify VM: %v", err)
 	}
 
-	// Create HDD
-	cmd = exec.Command("VBoxManage", "createhd", "--filename", name+".vdi", "--size", "10000")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create HDD: %v", err)
-	}
-
-	// Attach HDD
+	// Add storage controller
 	cmd = exec.Command("VBoxManage", "storagectl", name, "--name", "SATA", "--add", "sata")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to add storage controller: %v", err)
 	}
 
-	cmd = exec.Command("VBoxManage", "storageattach", name, "--storagectl", "SATA", "--port", "0", "--device", "0", "--type", "hdd", "--medium", name+".vdi")
+	// Attach existing multiattach disk
+	cmd = exec.Command("VBoxManage", "storageattach", name, "--storagectl", "SATA", "--port", "0", "--device", "0", "--type", "hdd", "--medium", diskPath, "--mtype", "multiattach")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to attach HDD: %v", err)
 	}
 
-	// Start VM (but for demo, perhaps not, as it needs ISO)
-	// cmd = exec.Command("VBoxManage", "startvm", name, "--type", "headless")
+	// Start VM
+	cmd = exec.Command("VBoxManage", "startvm", name, "--type", "headless")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start VM: %v", err)
+	}
 
 	return nil
 }

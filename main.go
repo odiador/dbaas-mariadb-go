@@ -13,9 +13,10 @@ import (
 )
 
 type CommandRequest struct {
-	Action string `json:"action"` // "create", "delete", "view"
-	VMName string `json:"vm_name,omitempty"`
-	DBName string `json:"db_name,omitempty"`
+	Action   string `json:"action"`     // "create", "delete", "view"
+	VMName   string `json:"vm_name,omitempty"`
+	DBName   string `json:"db_name,omitempty"`
+	DiskPath string `json:"disk_path,omitempty"`
 }
 
 type Response struct {
@@ -59,11 +60,11 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case "create":
-		if req.VMName == "" {
+		if req.VMName == "" || req.DiskPath == "" {
 			resp.Success = false
-			resp.Message = "VM name required"
+			resp.Message = "VM name and disk path required"
 		} else {
-			err := vm.CreateVM(req.VMName)
+			err := vm.CreateVM(req.VMName, req.DiskPath)
 			if err != nil {
 				resp.Success = false
 				resp.Message = err.Error()
@@ -75,7 +76,7 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 					resp.Message = err.Error()
 				} else {
 					resp.Message = fmt.Sprintf("VM %s created and MariaDB configured", req.VMName)
-					logAction("create", fmt.Sprintf("VM: %s, DB: %s", req.VMName, req.DBName))
+					logAction("create", fmt.Sprintf("VM: %s, DB: %s, Disk: %s", req.VMName, req.DBName, req.DiskPath))
 				}
 			}
 		}
@@ -113,20 +114,19 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func configureMariaDB(vmName, dbName string) error {
-	// Assume VM is running and SSH accessible
-	client, err := ssh.NewClient(vmName, "user", "password") // TODO: proper auth
+	// Leer configuración de variables de entorno
+	host := getEnv("VM_IP", "192.168.56.101")
+	user := getEnv("VM_USER", "debian")
+	pass := getEnv("VM_PASS", "password")
+
+	client, err := ssh.NewClient(host, user, pass)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	// Install MariaDB if not installed
-	_, err = client.RunCommand("sudo apt update && sudo apt install -y mariadb-server")
-	if err != nil {
-		return err
-	}
-
-	// Start MariaDB
+	// Assume MariaDB is installed and SSH configured
+	// Start MariaDB if not running
 	_, err = client.RunCommand("sudo systemctl start mariadb")
 	if err != nil {
 		return err
@@ -134,13 +134,22 @@ func configureMariaDB(vmName, dbName string) error {
 
 	// Create database if dbName provided
 	if dbName != "" {
-		err = db.CreateDatabase(client, dbName)
+		dbUser := getEnv("DB_USER", "dbaas_user")
+		dbPass := getEnv("DB_PASS", "password")
+		err = db.CreateDatabase(client, dbName, dbUser, dbPass)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func main() {
