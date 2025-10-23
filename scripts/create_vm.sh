@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ============================================================
 # Script: Crear VM con disco multiattach y configurar MariaDB
@@ -11,6 +11,13 @@
 # ============================================================
 
 set -e  # Salir si hay algún error
+
+# If the script is executed with "sh" (dash) it can fail because
+# the script uses bash-specific features (e.g. [[ ]] and read -p).
+# Re-exec the script under bash to ensure compatible shell.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
 
 # ============================================================
 # Mostrar ayuda
@@ -169,10 +176,10 @@ echo ""
 # Paso 5: Montar disco adicional si se especificó
 # ============================================================
 if [[ -n "$DISK_PATH" ]]; then
-  echo "💾 [5/5] Montando disco adicional en SATA port 1..."
+  echo "💾 [5/5] Montando disco adicional en SATA port 0..."
   VBoxManage storageattach "$VM_NAME" \
     --storagectl "SATA" \
-    --port 1 \
+    --port 0 \
     --device 0 \
     --type hdd \
     --medium "$DISK_PATH" \
